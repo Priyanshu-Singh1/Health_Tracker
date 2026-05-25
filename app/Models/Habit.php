@@ -166,6 +166,63 @@ class Habit extends Model
     }
 
     /**
+     * Mark habit as completed for a specific date (no streak updates to prevent complexity).
+     */
+    public function markCompleteForDate(string $date): ?HabitCompletion
+    {
+        if ($this->isCompletedOn($date)) {
+            return null;
+        }
+
+        $dateObj = Carbon::parse($date);
+        $xpEarned = $this->xp_reward;
+        $coinsEarned = $this->coin_reward;
+
+        $completion = $this->completions()->create([
+            'user_id' => $this->user_id,
+            'completed_date' => $dateObj->toDateString(),
+            'xp_earned' => $xpEarned,
+            'coins_earned' => $coinsEarned,
+        ]);
+
+        $this->total_completions++;
+        $this->save();
+
+        $user = $this->user;
+        $user->addXp($xpEarned);
+        $user->addCoins($coinsEarned);
+        $user->increment('total_habits_completed');
+
+        return $completion;
+    }
+
+    /**
+     * Undo completion for a specific date.
+     */
+    public function markIncompleteForDate(string $date): bool
+    {
+        $completion = $this->completions()
+            ->where('completed_date', $date)
+            ->first();
+
+        if (!$completion) {
+            return false;
+        }
+
+        $user = $this->user;
+        $user->xp = max(0, $user->xp - $completion->xp_earned);
+        $user->coins = max(0, $user->coins - $completion->coins_earned);
+        $user->total_habits_completed = max(0, $user->total_habits_completed - 1);
+        $user->save();
+
+        $this->total_completions = max(0, $this->total_completions - 1);
+        $this->save();
+
+        $completion->delete();
+        return true;
+    }
+
+    /**
      * Get streak status with emoji.
      */
     public function getStreakStatusAttribute(): string

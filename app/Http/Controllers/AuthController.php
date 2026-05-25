@@ -27,13 +27,20 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return back()->withErrors([
+                'email' => 'User does not exist. Please create a character first.',
+            ])->onlyInput('email');
+        }
+
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
             return redirect()->intended('/dashboard');
         }
 
         return back()->withErrors([
-            'email' => 'The provided credentials do not match our records.',
+            'email' => 'The provided password is incorrect.',
         ])->onlyInput('email');
     }
 

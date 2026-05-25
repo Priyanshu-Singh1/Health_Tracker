@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Habit;
 use App\Models\HabitCompletion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -78,5 +79,59 @@ class CalendarController extends Controller
             'calendarData', 'monthName', 'month', 'year',
             'prevMonth', 'nextMonth', 'totalHabits', 'monthlyStreak'
         ));
+    }
+
+    /**
+     * Show habits for a specific date.
+     */
+    public function showDay(Request $request, $date)
+    {
+        $user = Auth::user();
+        $dateObj = Carbon::parse($date);
+        
+        // Prevent tracking for future dates
+        if ($dateObj->isFuture()) {
+            if ($request->ajax()) {
+                return response()->json(['error' => 'Cannot track habits for future dates.'], 400);
+            }
+            return redirect()->route('calendar')->with('error', 'Cannot track habits for future dates.');
+        }
+
+        $habits = $user->habits()->where('is_active', true)->get();
+        $dateFormatted = $dateObj->format('F j, Y');
+
+        if ($request->ajax()) {
+            return view('calendar.partials.day_habits', compact('habits', 'date', 'dateFormatted'));
+        }
+
+        return view('calendar.show', compact('habits', 'date', 'dateFormatted'));
+    }
+
+    /**
+     * Toggle habit completion for a specific date.
+     */
+    public function toggleHabitForDay(Request $request, $date, Habit $habit)
+    {
+        if ($habit->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized');
+        }
+
+        $dateObj = Carbon::parse($date);
+        if ($dateObj->isFuture()) {
+            if ($request->ajax()) {
+                return response()->json(['error' => 'Cannot track habits for future dates.'], 400);
+            }
+            return back()->with('error', 'Cannot track habits for future dates.');
+        }
+
+        if ($habit->isCompletedOn($date)) {
+            $habit->markIncompleteForDate($date);
+            if ($request->ajax()) return response()->json(['success' => true]);
+            return back()->with('info', 'Habit marked as incomplete for ' . $dateObj->format('M j') . '.');
+        }
+
+        $habit->markCompleteForDate($date);
+        if ($request->ajax()) return response()->json(['success' => true]);
+        return back()->with('success', 'Habit completed for ' . $dateObj->format('M j') . '! +'.$habit->xp_reward.' XP 🎉');
     }
 }

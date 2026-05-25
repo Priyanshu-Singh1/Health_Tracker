@@ -45,6 +45,15 @@
         box-shadow: 0 15px 30px rgba(0,0,0,0.4);
     }
     
+    .calendar-day:hover .track-btn {
+        opacity: 1 !important;
+    }
+    
+    .track-btn:hover {
+        color: var(--primary) !important;
+        transform: scale(1.2);
+    }
+    
     .day-number {
         font-weight: 700;
         font-size: 1.25rem;
@@ -148,6 +157,40 @@
         transform: scale(1.5);
         opacity: 0.8;
     }
+    
+    /* Modal Styles */
+    .custom-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    .custom-modal.show {
+        display: flex;
+        opacity: 1;
+    }
+    .modal-box {
+        background: var(--bg-color);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.2);
+        border-radius: 1.5rem;
+        width: 90%;
+        max-width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
+        transform: scale(0.95) translateY(20px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .custom-modal.show .modal-box {
+        transform: scale(1) translateY(0);
+    }
 </style>
 @endpush
 
@@ -216,7 +259,13 @@
                         }
                     @endphp
                     
-                    <div class="calendar-day {{ $dayClass }}">
+                    <div class="calendar-day {{ $dayClass }}" @if(!$day['isFuture']) onclick="openTrackModal('{{ $day['date'] }}', '{{ \Carbon\Carbon::createFromDate($year, $month, $day['day'])->format('F j, Y') }}')" @endif>
+                        @if(!$day['isFuture'])
+                            <div class="track-btn" style="position: absolute; top: 0.25rem; right: 0.25rem; color: var(--text-secondary); opacity: 0; transition: opacity 0.2s; font-size: 0.8rem; padding: 0.25rem;" title="Track habits for this day">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </div>
+                        @endif
+
                         <span class="day-number">{{ $day['day'] }}</span>
                         
                         @if($day['total'] > 0 && !$day['isFuture'])
@@ -297,4 +346,97 @@
         </div>
     </div>
 </div>
+
+<!-- Tracking Modal -->
+<div id="trackModal" class="custom-modal">
+    <div class="modal-box">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(30,41,59,0.5);">
+            <h3 id="modalDateTitle" style="margin: 0; font-size: 1.25rem;">Track Habits</h3>
+            <button onclick="closeTrackModal()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.25rem; transition: color 0.2s;"><i class="fa-solid fa-times"></i></button>
+        </div>
+        <div id="modalContent" style="padding: 1.5rem;">
+            <!-- Content will be injected here via AJAX -->
+        </div>
+    </div>
+</div>
 @endsection
+
+@push('scripts')
+<script>
+    let currentTrackDate = null;
+    
+    function openTrackModal(dateStr, formattedDate) {
+        document.getElementById('modalDateTitle').innerText = formattedDate;
+        const modal = document.getElementById('trackModal');
+        modal.style.display = 'flex';
+        // Trigger reflow for animation
+        void modal.offsetWidth;
+        modal.classList.add('show');
+        currentTrackDate = dateStr;
+        loadHabitsForDate(dateStr);
+    }
+
+    function closeTrackModal() {
+        const modal = document.getElementById('trackModal');
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+            // Reload page to reflect new consistency %
+            window.location.reload();
+        }, 300);
+    }
+
+    async function loadHabitsForDate(dateStr) {
+        const contentDiv = document.getElementById('modalContent');
+        contentDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem 0;"><i class="fa-solid fa-circle-notch fa-spin fa-2x"></i></div>';
+        
+        try {
+            const response = await fetch(`/calendar/${dateStr}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const html = await response.text();
+            contentDiv.innerHTML = html;
+            
+            // Attach AJAX submit handlers to the forms inside modal
+            attachFormHandlers();
+        } catch (e) {
+            contentDiv.innerHTML = '<div class="alert alert-error">Failed to load habits.</div>';
+        }
+    }
+
+    function attachFormHandlers() {
+        const forms = document.querySelectorAll('#modalContent .toggle-habit-form');
+        forms.forEach(form => {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = form.querySelector('button');
+                const originalIcon = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+                btn.disabled = true;
+                
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const data = await response.json();
+                    if(data.success) {
+                        // Reload the partial to get updated states
+                        loadHabitsForDate(currentTrackDate);
+                    }
+                } catch(err) {
+                    console.error(err);
+                    btn.innerHTML = originalIcon;
+                    btn.disabled = false;
+                }
+            });
+        });
+    }
+
+    // Close on click outside
+    document.getElementById('trackModal').addEventListener('click', function(e) {
+        if(e.target === this) closeTrackModal();
+    });
+</script>
+@endpush

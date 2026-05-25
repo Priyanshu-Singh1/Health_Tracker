@@ -46,6 +46,8 @@ Route::middleware('auth')->group(function () {
 
     // Calendar
     Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
+    Route::get('/calendar/{date}', [CalendarController::class, 'showDay'])->name('calendar.day');
+    Route::post('/calendar/{date}/toggle/{habit}', [CalendarController::class, 'toggleHabitForDay'])->name('calendar.toggle');
 
     // Admin Routes
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
