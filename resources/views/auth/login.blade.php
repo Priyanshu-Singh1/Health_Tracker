@@ -29,8 +29,9 @@
         </div>
 
         <div class="form-group">
-            <div class="flex justify-between">
-                <label class="form-label" for="password">Password</label>
+            <div class="flex justify-between items-center mb-1">
+                <label class="form-label" for="password" style="margin: 0;">Password</label>
+                <a href="{{ route('password.request') }}" style="font-size: 0.85rem; color: var(--primary);">Forgot Password?</a>
             </div>
             <input type="password" id="password" name="password" class="form-control" required>
         </div>
